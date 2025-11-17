@@ -4,10 +4,13 @@ import Layout from "@/components/Layout";
 import StreakDisplay from "@/components/StreakDisplay";
 import AchievementBadge from "@/components/AchievementBadge";
 import MotivationDialog from "@/components/MotivationDialog";
+import DailyQuestCard from "@/components/DailyQuestCard";
+import MysteryBoxDialog from "@/components/MysteryBoxDialog";
+import AICoachCard from "@/components/AICoachCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, Award, Share2, BarChart } from "lucide-react";
+import { TrendingUp, Award, Share2, BarChart, Gift, Target } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProfileData {
@@ -15,6 +18,9 @@ interface ProfileData {
   total_days: number;
   name: string;
   last_activity_date: string | null;
+  xp: number;
+  level: number;
+  quest_streak: number;
 }
 
 interface Achievement {
@@ -38,6 +44,11 @@ const Dashboard = () => {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [recentAchievements, setRecentAchievements] = useState<Achievement[]>([]);
   const [recentPosts, setRecentPosts] = useState<Post[]>([]);
+  const [dailyQuests, setDailyQuests] = useState<any[]>([]);
+  const [userQuests, setUserQuests] = useState<any[]>([]);
+  const [mysteryBoxes, setMysteryBoxes] = useState<any[]>([]);
+  const [selectedBox, setSelectedBox] = useState<any>(null);
+  const [showBoxDialog, setShowBoxDialog] = useState(false);
   const [showMotivationDialog, setShowMotivationDialog] = useState(false);
   const [userId, setUserId] = useState<string>("");
   const navigate = useNavigate();
@@ -99,6 +110,40 @@ const Dashboard = () => {
     if (posts) {
       setRecentPosts(posts as Post[]);
     }
+
+    // Fetch daily quests
+    const today = new Date().toISOString().split('T')[0];
+    const { data: quests } = await supabase
+      .from("daily_quests")
+      .select("*")
+      .limit(3);
+
+    if (quests) {
+      setDailyQuests(quests);
+      
+      // Fetch user quest progress
+      const { data: progress } = await supabase
+        .from("user_quests")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("assigned_date", today);
+      
+      if (progress) {
+        setUserQuests(progress);
+      }
+    }
+
+    // Fetch mystery boxes
+    const { data: boxes } = await supabase
+      .from("mystery_boxes")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("is_opened", false)
+      .order("created_at", { ascending: false });
+
+    if (boxes) {
+      setMysteryBoxes(boxes);
+    }
   };
 
   const handleMotivationSubmit = () => {
@@ -119,7 +164,7 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StreakDisplay
             streak={profile?.streak || 0}
             totalDays={profile?.total_days || 0}
@@ -132,8 +177,27 @@ const Dashboard = () => {
                   <TrendingUp className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <div className="text-2xl font-bold">View Stats</div>
-                  <div className="text-sm text-muted-foreground">Track your motivation</div>
+                  <div className="text-2xl font-bold">Level {profile?.level || 1}</div>
+                  <div className="text-sm text-muted-foreground">{profile?.xp || 0} XP</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card hover-scale cursor-pointer" onClick={() => {
+            if (mysteryBoxes.length > 0) {
+              setSelectedBox(mysteryBoxes[0]);
+              setShowBoxDialog(true);
+            }
+          }}>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gradient-success rounded-lg flex items-center justify-center">
+                  <Gift className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{mysteryBoxes.length}</div>
+                  <div className="text-sm text-muted-foreground">Mystery Boxes</div>
                 </div>
               </div>
             </CardContent>
@@ -153,6 +217,37 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* AI Coach */}
+        <AICoachCard />
+
+        {/* Daily Quests */}
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="w-5 h-5 text-primary" />
+              Daily Quests
+              <span className="ml-auto text-sm font-normal text-muted-foreground">
+                {userQuests.filter(q => q.status === 'completed').length}/{dailyQuests.length}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {dailyQuests.map((quest) => {
+                const userQuest = userQuests.find(uq => uq.quest_id === quest.id);
+                return (
+                  <DailyQuestCard
+                    key={quest.id}
+                    quest={quest}
+                    userQuest={userQuest}
+                    onUpdate={fetchDashboardData}
+                  />
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Quick Actions */}
         <Card className="shadow-card">
@@ -240,6 +335,13 @@ const Dashboard = () => {
         onOpenChange={setShowMotivationDialog}
         userId={userId}
         onSubmit={handleMotivationSubmit}
+      />
+
+      <MysteryBoxDialog
+        open={showBoxDialog}
+        onOpenChange={setShowBoxDialog}
+        box={selectedBox}
+        onOpened={fetchDashboardData}
       />
     </Layout>
   );
