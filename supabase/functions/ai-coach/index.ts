@@ -100,10 +100,61 @@ serve(async (req) => {
         5. ให้กำลังใจปิดท้าย`;
 
     } else if (type === "chat") {
+      const body = await req.json();
+      const { message: userMessage, conversationHistory } = body;
+      
       systemPrompt = `คุณคือ AI Learning Coach ที่เป็นมิตร ให้คำแนะนำเกี่ยวกับการเรียนรู้ แรงจูงใจ และการพัฒนาตนเอง
         ตอบเป็นภาษาไทยที่เข้าใจง่าย ใช้ emoji บ้าง และให้คำตอบที่เป็นประโยชน์จริง`;
       
-      userPrompt = await req.json().then(data => data.message || "สวัสดี");
+      const aiMessages = [
+        { role: "system", content: systemPrompt },
+        ...(conversationHistory || []),
+        { role: "user", content: userMessage || "สวัสดี" }
+      ];
+
+      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: aiMessages,
+        }),
+      });
+
+      if (!aiResponse.ok) {
+        const errorText = await aiResponse.text();
+        console.error("AI gateway error:", aiResponse.status, errorText);
+        
+        if (aiResponse.status === 429) {
+          return new Response(JSON.stringify({ 
+            error: "ใช้งาน AI มากเกินไป กรุณารอสักครู่แล้วลองใหม่" 
+          }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        if (aiResponse.status === 402) {
+          return new Response(JSON.stringify({ 
+            error: "ระบบ AI ไม่สามารถใช้งานได้ กรุณาติดต่อผู้ดูแลระบบ" 
+          }), {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        throw new Error("AI gateway error");
+      }
+
+      const aiData = await aiResponse.json();
+      const chatMessage = aiData.choices[0].message.content;
+
+      return new Response(JSON.stringify({ message: chatMessage }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
