@@ -152,23 +152,33 @@ const Share = () => {
     const { data: achievement } = await supabase
       .from("achievements")
       .select("*")
-      .eq("category", "social")
-      .eq("title", "First Steps")
+      .eq("category", "posts")
+      .eq("milestone_value", 1)
       .single();
 
     if (achievement) {
-      const { error } = await supabase
+      // Check if user already has this achievement
+      const { data: existing } = await supabase
         .from("user_achievements")
-        .insert({
-          user_id: userId,
-          achievement_id: achievement.id
-        });
+        .select("id")
+        .eq("user_id", userId)
+        .eq("achievement_id", achievement.id)
+        .single();
 
-      if (!error) {
-        toast({
-          title: "Achievement Unlocked! 🏆",
-          description: `${achievement.title} - ${achievement.description}`,
-        });
+      if (!existing) {
+        const { error } = await supabase
+          .from("user_achievements")
+          .insert({
+            user_id: userId,
+            achievement_id: achievement.id
+          });
+
+        if (!error) {
+          toast({
+            title: "Achievement Unlocked! 🏆",
+            description: `${achievement.title} - ${achievement.description}`,
+          });
+        }
       }
     }
   };
