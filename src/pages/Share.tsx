@@ -126,6 +126,16 @@ const Share = () => {
         variant: "destructive"
       });
     } else {
+      // Check for "First Steps" achievement (first post)
+      const { data: postCount } = await supabase
+        .from("posts")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+      
+      if (postCount && (postCount as any).count === 1) {
+        await checkFirstPostAchievement(user.id);
+      }
+
       toast({
         title: "Posted successfully! 🎉",
         description: "Your learning has been shared with classmates."
@@ -135,6 +145,32 @@ const Share = () => {
       fetchPosts();
     }
     setLoading(false);
+  };
+
+  const checkFirstPostAchievement = async (userId: string) => {
+    // Check for "First Steps" achievement
+    const { data: achievement } = await supabase
+      .from("achievements")
+      .select("*")
+      .eq("category", "social")
+      .eq("title", "First Steps")
+      .single();
+
+    if (achievement) {
+      const { error } = await supabase
+        .from("user_achievements")
+        .insert({
+          user_id: userId,
+          achievement_id: achievement.id
+        });
+
+      if (!error) {
+        toast({
+          title: "Achievement Unlocked! 🏆",
+          description: `${achievement.title} - ${achievement.description}`,
+        });
+      }
+    }
   };
 
   const checkAchievements = async (userId: string, streak: number) => {
@@ -148,17 +184,19 @@ const Share = () => {
     if (achievements) {
       for (const achievement of achievements) {
         if (streak >= achievement.milestone_value) {
-          await supabase.from("user_achievements").insert({
-            user_id: userId,
-            achievement_id: achievement.id
-          }).then(({ error }) => {
-            if (!error) {
-              toast({
-                title: `Achievement Unlocked! 🏆`,
-                description: achievement.title
-              });
-            }
-          });
+          const { error } = await supabase
+            .from("user_achievements")
+            .insert({
+              user_id: userId,
+              achievement_id: achievement.id
+            });
+
+          if (!error) {
+            toast({
+              title: `Achievement Unlocked! 🏆`,
+              description: `${achievement.title} - ${achievement.description}`
+            });
+          }
         }
       }
     }
