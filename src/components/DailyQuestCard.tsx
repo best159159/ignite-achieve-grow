@@ -58,7 +58,7 @@ const DailyQuestCard = ({ quest, userQuest, onUpdate }: DailyQuestCardProps) => 
           .eq("id", userQuest.id);
 
         if (newStatus === 'completed') {
-          // Award XP
+          // Award XP and update streak
           const { data: profile } = await supabase
             .from("profiles")
             .select("xp, quest_streak, last_quest_date")
@@ -67,12 +67,19 @@ const DailyQuestCard = ({ quest, userQuest, onUpdate }: DailyQuestCardProps) => 
 
           const today = new Date().toISOString().split('T')[0];
           const lastQuestDate = profile?.last_quest_date;
-          const newStreak = lastQuestDate === today ? profile.quest_streak : (profile?.quest_streak || 0) + 1;
+          
+          // Streak increments only if last quest was yesterday or earlier
+          let newStreak = profile?.quest_streak || 0;
+          if (lastQuestDate !== today) {
+            newStreak += 1;
+          }
+
+          const newXP = (profile?.xp || 0) + quest.xp_reward;
 
           await supabase
             .from("profiles")
             .update({ 
-              xp: (profile?.xp || 0) + quest.xp_reward,
+              xp: newXP,
               quest_streak: newStreak,
               last_quest_date: today
             })
@@ -80,21 +87,61 @@ const DailyQuestCard = ({ quest, userQuest, onUpdate }: DailyQuestCardProps) => 
 
           toast({
             title: "เยี่ยมมาก! 🎉",
-            description: `คุณทำภารกิจสำเร็จและได้ +${quest.xp_reward} XP`,
+            description: `ทำภารกิจสำเร็จ! +${quest.xp_reward} XP (รวม ${newXP} XP)`,
+          });
+        } else {
+          toast({
+            title: "ดีมาก! 👍",
+            description: `ความคืบหน้า ${newProgress}/${quest.target_value}`,
           });
         }
       } else {
         // Create new user quest
+        const newProgress = 1;
+        const isCompleted = newProgress >= quest.target_value;
+        
         await supabase
           .from("user_quests")
           .insert({
             user_id: user.id,
             quest_id: quest.id,
-            progress: 1,
+            progress: newProgress,
             assigned_date: new Date().toISOString().split('T')[0],
-            status: 1 >= quest.target_value ? 'completed' : 'active',
-            completed_at: 1 >= quest.target_value ? new Date().toISOString() : null
+            status: isCompleted ? 'completed' : 'active',
+            completed_at: isCompleted ? new Date().toISOString() : null
           });
+
+        if (isCompleted) {
+          // Award XP for first-time completion
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("xp, quest_streak, last_quest_date")
+            .eq("id", user.id)
+            .single();
+
+          const today = new Date().toISOString().split('T')[0];
+          const newStreak = (profile?.quest_streak || 0) + 1;
+          const newXP = (profile?.xp || 0) + quest.xp_reward;
+
+          await supabase
+            .from("profiles")
+            .update({ 
+              xp: newXP,
+              quest_streak: newStreak,
+              last_quest_date: today
+            })
+            .eq("id", user.id);
+
+          toast({
+            title: "เยี่ยมมาก! 🎉",
+            description: `ทำภารกิจสำเร็จ! +${quest.xp_reward} XP (รวม ${newXP} XP)`,
+          });
+        } else {
+          toast({
+            title: "ดีมาก! 👍",
+            description: `ความคืบหน้า ${newProgress}/${quest.target_value}`,
+          });
+        }
       }
 
       onUpdate();
