@@ -59,6 +59,16 @@ const Achievements = () => {
     { key: "motivation_planning", label: "Planning", icon: "Calendar" },
   ];
 
+  if (loading) {
+    return (
+      <Layout>
+        <div className="text-center py-12">
+          <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="space-y-6 animate-fade-in">
@@ -104,6 +114,9 @@ const Achievements = () => {
                 <CardTitle className="flex items-center gap-2">
                   <Award className="w-5 h-5 text-primary" />
                   {category.label}
+                  <span className="text-sm text-muted-foreground ml-2">
+                    ({categoryAchievements.filter(a => userAchievements.includes(a.id)).length}/{categoryAchievements.length})
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -123,12 +136,6 @@ const Achievements = () => {
             </Card>
           );
         })}
-
-        {loading && (
-          <div className="text-center py-12">
-            <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto" />
-          </div>
-        )}
       </div>
     </Layout>
   );
