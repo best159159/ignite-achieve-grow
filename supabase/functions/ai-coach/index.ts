@@ -12,7 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { type, userId } = await req.json();
+    // อ่าน body ครั้งเดียวเพื่อป้องกัน "Body already consumed" error
+    const requestBody = await req.json();
+    const { type, userId, message: userMessage, conversationHistory } = requestBody;
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -100,9 +102,7 @@ serve(async (req) => {
         5. ให้กำลังใจปิดท้าย`;
 
     } else if (type === "chat") {
-      const body = await req.json();
-      const { message: userMessage, conversationHistory } = body;
-      
+      // ใช้ข้อมูลจาก requestBody ที่อ่านไว้แล้ว
       systemPrompt = `คุณคือ AI Learning Coach ที่เป็นมิตร ให้คำแนะนำเกี่ยวกับการเรียนรู้ แรงจูงใจ และการพัฒนาตนเอง
         ตอบเป็นภาษาไทยที่เข้าใจง่าย ใช้ emoji บ้าง และให้คำตอบที่เป็นประโยชน์จริง`;
       
