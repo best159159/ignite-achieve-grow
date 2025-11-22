@@ -126,14 +126,14 @@ const Share = () => {
         variant: "destructive"
       });
     } else {
-      // Check for "First Steps" achievement (first post)
-      const { data: postCount } = await supabase
+      // Count total posts after inserting
+      const { count } = await supabase
         .from("posts")
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id);
       
-      if (postCount && (postCount as any).count === 1) {
-        await checkFirstPostAchievement(user.id);
+      if (count) {
+        await checkPostAchievements(user.id, count);
       }
 
       toast({
@@ -147,37 +147,41 @@ const Share = () => {
     setLoading(false);
   };
 
-  const checkFirstPostAchievement = async (userId: string) => {
-    // Check for "First Steps" achievement
-    const { data: achievement } = await supabase
+  const checkPostAchievements = async (userId: string, postCount: number) => {
+    // Check for post milestones: 1, 10, 20, 50
+    const postMilestones = [1, 10, 20, 50];
+    const { data: achievements } = await supabase
       .from("achievements")
       .select("*")
       .eq("category", "posts")
-      .eq("milestone_value", 1)
-      .single();
+      .in("milestone_value", postMilestones);
 
-    if (achievement) {
-      // Check if user already has this achievement
-      const { data: existing } = await supabase
-        .from("user_achievements")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("achievement_id", achievement.id)
-        .single();
+    if (achievements) {
+      for (const achievement of achievements) {
+        if (postCount >= achievement.milestone_value) {
+          // Check if user already has this achievement
+          const { data: existing } = await supabase
+            .from("user_achievements")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("achievement_id", achievement.id)
+            .maybeSingle();
 
-      if (!existing) {
-        const { error } = await supabase
-          .from("user_achievements")
-          .insert({
-            user_id: userId,
-            achievement_id: achievement.id
-          });
+          if (!existing) {
+            const { error } = await supabase
+              .from("user_achievements")
+              .insert({
+                user_id: userId,
+                achievement_id: achievement.id
+              });
 
-        if (!error) {
-          toast({
-            title: "Achievement Unlocked! 🏆",
-            description: `${achievement.title} - ${achievement.description}`,
-          });
+            if (!error) {
+              toast({
+                title: "Achievement Unlocked! 🏆",
+                description: `${achievement.title} - ${achievement.description}`,
+              });
+            }
+          }
         }
       }
     }
